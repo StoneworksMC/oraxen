@@ -112,16 +112,11 @@ public class BreakerSystem {
                     breakerPerLocation.get(location).cancelTasks(OraxenPlugin.get());
 
                 final BukkitScheduler scheduler = Bukkit.getScheduler();
-                final PlayerInteractEvent playerInteractEvent = new PlayerInteractEvent(
-                        player,
-                        Action.LEFT_CLICK_BLOCK,
-                        player.getInventory().getItemInMainHand(),
-                        block,
-                        blockFace,
-                        EquipmentSlot.HAND
-                );
-                //scheduler.runTask(OraxenPlugin.get(), () -> Bukkit.getPluginManager().callEvent(playerInteractEvent));
-                if (playerInteractEvent.useInteractedBlock().equals(Event.Result.DENY)) return;
+                // Cancellation state is being ignored.
+                // However still needs to be called for plugin support.
+                final PlayerInteractEvent playerInteractEvent =
+                        new PlayerInteractEvent(player, Action.LEFT_CLICK_BLOCK, player.getInventory().getItemInMainHand(), block, blockFace, EquipmentSlot.HAND);
+                scheduler.runTask(OraxenPlugin.get(), () -> Bukkit.getPluginManager().callEvent(playerInteractEvent));
 
                 // If the relevant damage event is cancelled, return
                 if (blockDamageEventCancelled(block, player)) return;
@@ -204,7 +199,7 @@ public class BreakerSystem {
                     return Bukkit.getScheduler().callSyncMethod(OraxenPlugin.get(), () -> {
                         FurnitureMechanic mechanic = OraxenFurniture.getFurnitureMechanic(block);
                         if (mechanic == null) return true;
-                        OraxenFurnitureDamageEvent event = new OraxenFurnitureDamageEvent(mechanic, player, block, mechanic.getItemFrame(block));
+                        OraxenFurnitureDamageEvent event = new OraxenFurnitureDamageEvent(mechanic, player, block, mechanic.getBaseEntity(block));
                         Bukkit.getScheduler().runTask(OraxenPlugin.get(), () -> Bukkit.getPluginManager().callEvent(event));
                         return event.isCancelled();
                     }).get();
@@ -212,7 +207,9 @@ public class BreakerSystem {
                     return false;
                 }
             }
-            default -> { return true; }
+            default -> {
+                return true;
+            }
         }
     }
 
