@@ -6,6 +6,7 @@ import io.th0rgal.oraxen.config.Settings;
 import io.th0rgal.oraxen.mechanics.provided.misc.backpack.BackpackMechanic;
 import io.th0rgal.oraxen.utils.AdventureUtils;
 import io.th0rgal.oraxen.utils.Utils;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.event.EventHandler;
@@ -14,6 +15,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.enchantment.PrepareItemEnchantEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.PrepareAnvilEvent;
+import org.bukkit.event.player.PlayerEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.AnvilInventory;
 import org.bukkit.inventory.ItemStack;
@@ -21,6 +23,7 @@ import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -28,6 +31,10 @@ import java.util.Optional;
 public class ItemUpdater implements Listener {
 
     public static NamespacedKey ANVIL_RENAMED = NamespacedKey.fromString("oraxen:anvil_renamed");
+    private final static List<Material> weaponMaterials = List.of(
+        Material.DIAMOND_SWORD, Material.NETHERITE_SWORD, Material.DIAMOND_AXE, Material.NETHERITE_AXE, Material.IRON_AXE,
+        Material.GOLDEN_AXE
+    );
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
@@ -41,6 +48,18 @@ public class ItemUpdater implements Listener {
                 continue;
             inventory.setItem(i, newItem);
         }
+    }
+
+    @EventHandler
+    public void onItemTransaction(InventoryClickEvent event) {
+        if (!Settings.AUTO_UPDATE_ITEMS.toBool())
+            return;
+        ItemStack oldItem = event.getCurrentItem();
+        if (oldItem == null) return;
+        if (!weaponMaterials.contains(oldItem.getType())) return;
+        ItemStack newItem = ItemUpdater.updateItem(oldItem);
+        if (oldItem.equals(newItem)) return;
+        event.setCurrentItem(newItem);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -116,7 +135,7 @@ public class ItemUpdater implements Listener {
             if (oldMeta == null || newMeta == null) return;
             PersistentDataContainer oldPdc = oldMeta.getPersistentDataContainer();
 
-            // Add all enchantments from oldItem and add all from newItem aslong as it is not the same Enchantments
+            // Add all enchantments from oldItem and add all from newItem as long as it is not the same enchantments
             for (Map.Entry<Enchantment, Integer> entry : oldMeta.getEnchants().entrySet())
                 itemMeta.addEnchant(entry.getKey(), entry.getValue(), true);
             for (Map.Entry<Enchantment, Integer> entry : newMeta.getEnchants().entrySet().stream().filter(e -> !oldMeta.getEnchants().containsKey(e.getKey())).toList())
@@ -124,14 +143,19 @@ public class ItemUpdater implements Listener {
 
             itemMeta.setCustomModelData(newMeta.hasCustomModelData() ? newMeta.getCustomModelData() : oldMeta.hasCustomModelData() ? oldMeta.getCustomModelData() : 0);
 
-            // Lore might be changable ingame, but I think it is safe to just set it to new
-            itemMeta.setLore(newMeta.getLore());
+            // Using old item's lore, unless lore is null; then uses new lore if available
+            if (oldMeta.hasLore()) {
+                itemMeta.setLore(oldMeta.getLore());
+            }
+            else {
+                itemMeta.setLore(newMeta.getLore());
+            }
 
-            // Attribute modifiers are only able to be changed via config so no reason to chekc old
+            // Attribute modifiers can only be changed via config so no reason to check old
             itemMeta.setAttributeModifiers(newMeta.getAttributeModifiers());
 
-            // Renaming items should be kept, so check old against new and add it if its from ANVIL_RENAMED
-            if (oldMeta.hasDisplayName() && oldPdc.has(ANVIL_RENAMED, DataType.STRING))
+            // Due to rename plugin, registering via anvil doesn't work. Instead, make name persistent, ignore config name changes in favor of renames
+            if (oldMeta.hasDisplayName())
                 itemMeta.setDisplayName(oldMeta.getDisplayName());
             else itemMeta.setDisplayName(newMeta.getDisplayName());
 
